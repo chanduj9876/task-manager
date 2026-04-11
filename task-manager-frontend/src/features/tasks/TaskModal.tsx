@@ -25,9 +25,11 @@ interface Props {
 
 export default function TaskModal({ task, onClose, onSave, onDelete, error }: Props) {
   const members = useAppSelector((s) => s.org.members.filter((m) => m.status === 'ACTIVE'))
+  const currentUser = useAppSelector((s) => s.auth.user)
   const [comments, setComments] = useState<Comment[]>([])
   const [commentText, setCommentText] = useState('')
   const [commentLoading, setCommentLoading] = useState(false)
+  const [commentError, setCommentError] = useState<string | null>(null)
   const commentsEndRef = useRef<HTMLDivElement>(null)
 
   const {
@@ -70,22 +72,26 @@ export default function TaskModal({ task, onClose, onSave, onDelete, error }: Pr
   const handleAddComment = async () => {
     if (!task || !commentText.trim()) return
     setCommentLoading(true)
+    setCommentError(null)
     try {
       const res = await taskApi.addComment(task.id, commentText.trim())
       setComments((prev) => [...prev, res.data.data])
       setCommentText('')
     } catch {
-      // silently ignore — could add toast here later
+      setCommentError('Failed to post comment. Please try again.')
     } finally {
       setCommentLoading(false)
     }
   }
 
   const handleDeleteComment = async (commentId: string) => {
+    setCommentError(null)
     try {
       await taskApi.deleteComment(commentId)
       setComments((prev) => prev.filter((c) => c.id !== commentId))
-    } catch {}
+    } catch {
+      setCommentError('Failed to delete comment. Please try again.')
+    }
   }
 
   return (
@@ -181,14 +187,16 @@ export default function TaskModal({ task, onClose, onSave, onDelete, error }: Pr
                         <span className="text-xs text-gray-400">
                           {new Date(c.createdAt).toLocaleString()}
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteComment(c.id)}
-                          className="text-gray-300 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 text-xs leading-none"
-                          title="Delete comment"
-                        >
-                          ✕
-                        </button>
+                        {c.userId === currentUser?.id && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteComment(c.id)}
+                            className="text-gray-300 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 text-xs leading-none"
+                            title="Delete comment"
+                          >
+                            ✕
+                          </button>
+                        )}
                       </div>
                     </div>
                     <p className="text-sm text-gray-700 whitespace-pre-wrap">{c.content}</p>
@@ -217,6 +225,9 @@ export default function TaskModal({ task, onClose, onSave, onDelete, error }: Pr
                 {commentLoading ? '…' : 'Post'}
               </Button>
             </div>
+            {commentError && (
+              <p className="text-xs text-red-600 mt-1">{commentError}</p>
+            )}
           </div>
         )}
 

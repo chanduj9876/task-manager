@@ -17,6 +17,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -40,8 +41,10 @@ public class LoginRateLimitFilter extends OncePerRequestFilter {
 
     private final StringRedisTemplate stringRedisTemplate;
 
-    // Fallback local buckets — used only when Redis is unreachable
-    private final Map<String, Bucket> localBuckets = new ConcurrentHashMap<>();
+    // Fallback local buckets with last-used timestamp to allow periodic eviction
+    private record BucketEntry(Bucket bucket, Instant lastUsed) {}
+    private final Map<String, BucketEntry> localBuckets = new ConcurrentHashMap<>();
+    private static final int MAX_LOCAL_BUCKETS = 10_000;
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
@@ -76,10 +79,19 @@ public class LoginRateLimitFilter extends OncePerRequestFilter {
             return count != null && count > MAX_ATTEMPTS;
         } catch (Exception e) {
             log.warn("Redis unavailable for rate limiting, falling back to local Bucket4j: {}", e.getMessage());
-            return !localBuckets
-                    .computeIfAbsent(ip, k -> buildLocalBucket())
-                    .tryConsume(1);
+            evictStaleLocalBuckets();
+            BucketEntry entry = localBuckets.compute(ip, (k, existing) -> {
+                Bucket bucket = existing != null ? existing.bucket() : buildLocalBucket();
+                return new BucketEntry(bucket, Instant.now());
+            });
+            return !entry.bucket().tryConsume(1);
         }
+    }
+
+    private void evictStaleLocalBuckets() {
+        if (localBuckets.size() < MAX_LOCAL_BUCKETS) return;
+        Instant cutoff = Instant.now().minus(WINDOW.multipliedBy(2));
+        localBuckets.entrySet().removeIf(e -> e.getValue().lastUsed().isBefore(cutoff));
     }
 
     /**
@@ -93,14 +105,10 @@ public class LoginRateLimitFilter extends OncePerRequestFilter {
     }
 
     private String resolveClientIp(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0].trim();
-        }
-        String realIp = request.getHeader("X-Real-IP");
-        if (realIp != null && !realIp.isBlank()) {
-            return realIp;
-        }
+        // Only trust X-Forwarded-For / X-Real-IP if explicitly configured to do so.
+        // Blindly trusting these headers allows clients to spoof IPs and bypass rate limiting.
+        // For production behind a trusted reverse proxy, set server.forward-headers-strategy=NATIVE
+        // and Spring will handle IP resolution securely via RemoteAddrValueResolver.
         return request.getRemoteAddr();
     }
 }

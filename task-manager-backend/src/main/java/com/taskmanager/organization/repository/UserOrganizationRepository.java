@@ -13,6 +13,8 @@ public interface UserOrganizationRepository
 
     List<UserOrganization> findByOrgId(UUID orgId);
 
+    List<UserOrganization> findByOrgIdAndStatus(UUID orgId, InvitationStatus status);
+
     List<UserOrganization> findByUserIdAndStatus(UUID userId, InvitationStatus status);
 
     Optional<UserOrganization> findByUserIdAndOrgId(UUID userId, UUID orgId);

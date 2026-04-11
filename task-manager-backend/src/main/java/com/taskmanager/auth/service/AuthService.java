@@ -33,13 +33,13 @@ public class AuthService implements IAuthService {
 
     @Transactional
     public AuthResponse signup(SignupRequest request) {
-        if (userRepository.existsByEmail(request.getEmail())) {
+        if (userRepository.existsByEmailIgnoreCase(request.getEmail())) {
             throw new AppException("Email already registered", HttpStatus.CONFLICT);
         }
 
         User user = User.builder()
                 .name(request.getName())
-                .email(request.getEmail())
+                .email(request.getEmail().toLowerCase())
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .role(Role.MEMBER) // Default role; Admin must be promoted manually
                 .build();
@@ -53,9 +53,9 @@ public class AuthService implements IAuthService {
 
     public AuthResponse login(LoginRequest request) {
         authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword()));
+                new UsernamePasswordAuthenticationToken(request.getEmail().toLowerCase(), request.getPassword()));
 
-        User user = userRepository.findByEmail(request.getEmail())
+        User user = userRepository.findByEmailIgnoreCase(request.getEmail())
                 .orElseThrow(() -> new AppException("User not found", HttpStatus.NOT_FOUND));
 
         String token = jwtUtil.generateToken(user.getId(), user.getEmail(), user.getRole().name());

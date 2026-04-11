@@ -24,18 +24,22 @@ public class NotificationProducer {
 
     @Async
     public void publishTaskEvent(TaskEventDto event) {
+        // For org events taskId is null — fall back to orgId as the partition key
+        String partitionKey = event.getTaskId() != null
+                ? event.getTaskId().toString()
+                : (event.getOrgId() != null ? event.getOrgId().toString() : "unknown");
         try {
-            kafkaTemplate.send(KafkaConfig.TASK_EVENTS_TOPIC, event.getTaskId().toString(), event)
-                    .thenAccept(result -> log.debug("Published task event: {} for task {}",
-                            event.getEventType(), event.getTaskId()))
+            kafkaTemplate.send(KafkaConfig.TASK_EVENTS_TOPIC, partitionKey, event)
+                    .thenAccept(result -> log.debug("Published task event: {} key={}",
+                            event.getEventType(), partitionKey))
                     .exceptionally(ex -> {
-                        log.warn("Failed to publish task event for task {}: {}",
-                                event.getTaskId(), ex.getMessage());
+                        log.warn("Failed to publish task event type={} key={}: {}",
+                                event.getEventType(), partitionKey, ex.getMessage());
                         return null;
                     });
         } catch (Exception ex) {
-            log.warn("Kafka unavailable, skipping event for task {}: {}",
-                    event.getTaskId(), ex.getMessage());
+            log.warn("Kafka unavailable, skipping event type={} key={}: {}",
+                    event.getEventType(), partitionKey, ex.getMessage());
         }
     }
 }

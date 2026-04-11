@@ -33,6 +33,8 @@ export default function OrgManagementPage() {
   const [showInvite, setShowInvite] = useState(false)
   const [forceAdd, setForceAdd] = useState(false)
   const [inviteMsg, setInviteMsg] = useState<string | null>(null)
+  const [inviteError, setInviteError] = useState<string | null>(null)
+  const [createOrgError, setCreateOrgError] = useState<string | null>(null)
   const [removingId, setRemovingId] = useState<string | null>(null)
   const [changingRoleId, setChangingRoleId] = useState<string | null>(null)
 
@@ -49,14 +51,21 @@ export default function OrgManagementPage() {
   }, [selectedOrgId, dispatch])
 
   const onCreateOrg = createForm.handleSubmit(async (data) => {
-    await dispatch(createOrgAsync(data.name))
-    createForm.reset()
-    setShowCreateOrg(false)
+    setCreateOrgError(null)
+    const result = await dispatch(createOrgAsync(data.name))
+    if (createOrgAsync.fulfilled.match(result)) {
+      createForm.reset()
+      setShowCreateOrg(false)
+    } else {
+      const msg = (result.payload as string) ?? (result.error?.message ?? 'Failed to create organization.')
+      setCreateOrgError(msg)
+    }
   })
 
   const onInvite = inviteForm.handleSubmit(async (data) => {
     if (!selectedOrgId) return
     setInviteMsg(null)
+    setInviteError(null)
     const result = await dispatch(inviteUserAsync({ orgId: selectedOrgId, email: data.email, force: forceAdd, role: data.role }))
     if (inviteUserAsync.fulfilled.match(result)) {
       const status = result.payload.status
@@ -66,6 +75,9 @@ export default function OrgManagementPage() {
           : `Invitation sent to ${data.email}. They need to accept before joining.`
       )
       inviteForm.reset()
+    } else {
+      const msg = (result.payload as string) ?? (result.error?.message ?? 'Failed to invite user.')
+      setInviteError(msg)
     }
   })
 
@@ -119,9 +131,12 @@ export default function OrgManagementPage() {
             placeholder="Organization name"
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
           />
+          {createOrgError && (
+            <p className="text-xs text-red-600">{createOrgError}</p>
+          )}
           <div className="flex gap-2">
             <Button type="submit" size="sm">Create</Button>
-            <Button type="button" variant="secondary" size="sm" onClick={() => setShowCreateOrg(false)}>Cancel</Button>
+            <Button type="button" variant="secondary" size="sm" onClick={() => { setShowCreateOrg(false); setCreateOrgError(null) }}>Cancel</Button>
           </div>
         </form>
       )}
@@ -194,6 +209,9 @@ export default function OrgManagementPage() {
               </label>
               {inviteMsg && (
                 <p className="text-xs text-green-600">{inviteMsg}</p>
+              )}
+              {inviteError && (
+                <p className="text-xs text-red-600">{inviteError}</p>
               )}
             </div>
           )}

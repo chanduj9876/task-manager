@@ -12,8 +12,9 @@ export function useWebSocket() {
   useEffect(() => {
     if (!token) return
 
+    const wsUrl = (import.meta.env.VITE_WS_URL ?? '') + '/ws'
     const client = new Client({
-      webSocketFactory: () => new SockJS('/ws'),
+      webSocketFactory: () => new SockJS(wsUrl),
       connectHeaders: { Authorization: `Bearer ${token}` },
       reconnectDelay: 5000,
       onConnect: () => {

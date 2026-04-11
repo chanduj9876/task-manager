@@ -1,5 +1,6 @@
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
 import type { DropResult } from '@hello-pangea/dnd'
+import { useState } from 'react'
 import { useAppDispatch, useAppSelector } from '@/app/hooks'
 import { selectTasksForCurrentOrg, changeStatusAsync } from '@/features/tasks/tasksSlice'
 import TaskCard from './TaskCard'
@@ -20,22 +21,31 @@ interface Props {
 export default function KanbanBoard({ onTaskClick, filterAssigneeId }: Props) {
   const dispatch = useAppDispatch()
   const tasks = useAppSelector(selectTasksForCurrentOrg)
+  const [dragError, setDragError] = useState<string | null>(null)
 
   const tasksByStatus = (status: TaskStatus) =>
     tasks.filter((t) => t.status === status && (!filterAssigneeId || t.assignedTo === filterAssigneeId))
 
-  const onDragEnd = (result: DropResult) => {
+  const onDragEnd = async (result: DropResult) => {
     if (!result.destination) return
     const newStatus = result.destination.droppableId as TaskStatus
     const taskId = result.draggableId
     const task = tasks.find((t) => t.id === taskId)
     if (task && task.status !== newStatus) {
-      dispatch(changeStatusAsync({ taskId, status: newStatus }))
+      setDragError(null)
+      try {
+        await dispatch(changeStatusAsync({ taskId, status: newStatus })).unwrap()
+      } catch {
+        setDragError('Failed to update task status. Please try again.')
+      }
     }
   }
 
   return (
     <DragDropContext onDragEnd={onDragEnd}>
+      {dragError && (
+        <p className="text-xs text-red-600 mb-2">{dragError}</p>
+      )}
       <div className="grid grid-cols-4 gap-4 h-full">
         {COLUMNS.map((col) => (
           <div key={col.id} className="flex flex-col">

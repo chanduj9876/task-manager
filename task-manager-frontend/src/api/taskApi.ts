@@ -10,9 +10,9 @@ interface PageResponse<T> {
 }
 
 export const taskApi = {
-  getTasks: (orgId: string, status?: TaskStatus, assignedTo?: string) =>
+  getTasks: (orgId: string, status?: TaskStatus, assignedTo?: string, page = 0, size = 200) =>
     axiosClient.get<ApiResponse<PageResponse<Task>>>('/api/tasks', {
-      params: { orgId, status, assignedTo, page: 0, size: 1000 },
+      params: { orgId, status, assignedTo, page, size },
     }),
 
   getTask: (taskId: string) =>

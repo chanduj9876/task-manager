@@ -51,10 +51,13 @@ server:
   port: 8080
   servlet:
     context-path: /
+  # Uncomment the line below when deploying behind a trusted reverse proxy (nginx/ALB).
+  # This lets Spring resolve the real client IP securely from X-Forwarded-For.
+  # forward-headers-strategy: native
 
 app:
   jwt:
-    secret: "3cfa76ef14937c1c0ea519f8fc057a80fcd04a7420f8e8bcd0a7567c272e007b"
+    secret: ${JWT_SECRET:3cfa76ef14937c1c0ea519f8fc057a80fcd04a7420f8e8bcd0a7567c272e007b}
     expiration-ms: 86400000   # 24 hours
     refresh-expiration-ms: 604800000  # 7 days
 

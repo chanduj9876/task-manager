@@ -28,16 +28,26 @@ export const fetchMembers = createAsyncThunk('org/fetchMembers', async (orgId: s
   return res.data.data
 })
 
-export const createOrgAsync = createAsyncThunk('org/create', async (name: string) => {
-  const res = await orgApi.createOrg(name)
-  return res.data.data
+export const createOrgAsync = createAsyncThunk('org/create', async (name: string, { rejectWithValue }) => {
+  try {
+    const res = await orgApi.createOrg(name)
+    return res.data.data
+  } catch (err: unknown) {
+    const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Failed to create organization.'
+    return rejectWithValue(msg)
+  }
 })
 
 export const inviteUserAsync = createAsyncThunk(
   'org/invite',
-  async (payload: { orgId: string; email: string; force: boolean; role?: Role }) => {
-    const res = await orgApi.inviteUser(payload.orgId, payload.email, payload.force, payload.role)
-    return res.data.data
+  async (payload: { orgId: string; email: string; force: boolean; role?: Role }, { rejectWithValue }) => {
+    try {
+      const res = await orgApi.inviteUser(payload.orgId, payload.email, payload.force, payload.role)
+      return res.data.data
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Failed to invite user.'
+      return rejectWithValue(msg)
+    }
   },
 )
 

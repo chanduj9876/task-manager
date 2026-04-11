@@ -12,7 +12,6 @@ import com.taskmanager.task.enums.TaskStatus;
 import com.taskmanager.task.factory.TaskFactory;
 import com.taskmanager.task.repository.TaskRepository;
 import com.taskmanager.user.entity.User;
-import com.taskmanager.user.enums.Role;
 import com.taskmanager.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
@@ -24,7 +23,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -202,16 +204,9 @@ public class TaskService implements ITaskService {
     }
 
     private void assertManagerOrAdmin(UUID userId, UUID orgId) {
-        // Delegates to org service — ADMIN is the strictest required here, but MANAGER also passes
-        try {
-            organizationService.assertMembership(userId, orgId, Role.ADMIN);
-        } catch (AppException e) {
-            try {
-                organizationService.assertMembership(userId, orgId, Role.MANAGER);
-            } catch (AppException ex) {
-                throw new AppException("Only ADMIN or MANAGER can perform this action",
-                        HttpStatus.FORBIDDEN);
-            }
+        if (!organizationService.isManagerOrAdminInOrg(userId, orgId)) {
+            throw new AppException("Only ADMIN or MANAGER can perform this action",
+                    HttpStatus.FORBIDDEN);
         }
     }
 
@@ -220,13 +215,13 @@ public class TaskService implements ITaskService {
     }
 
     public TaskResponse toResponse(Task task) {
-        String assignedToName = null;
-        if (task.getAssignedTo() != null) {
-            assignedToName = userRepository.findById(task.getAssignedTo())
-                    .map(User::getName).orElse(null);
-        }
-        String createdByName = userRepository.findById(task.getCreatedBy())
-                .map(User::getName).orElse(null);
+        // Collect unique non-null user IDs and fetch in a single query
+        Set<UUID> userIds = new java.util.HashSet<>();
+        if (task.getAssignedTo() != null) userIds.add(task.getAssignedTo());
+        userIds.add(task.getCreatedBy());
+
+        Map<UUID, String> nameCache = userRepository.findAllById(userIds)
+                .stream().collect(Collectors.toMap(User::getId, User::getName));
 
         return TaskResponse.builder()
                 .id(task.getId())
@@ -236,9 +231,9 @@ public class TaskService implements ITaskService {
                 .priority(task.getPriority())
                 .orgId(task.getOrgId())
                 .assignedTo(task.getAssignedTo())
-                .assignedToName(assignedToName)
+                .assignedToName(task.getAssignedTo() != null ? nameCache.get(task.getAssignedTo()) : null)
                 .createdBy(task.getCreatedBy())
-                .createdByName(createdByName)
+                .createdByName(nameCache.get(task.getCreatedBy()))
                 .dueDate(task.getDueDate())
                 .createdAt(task.getCreatedAt())
                 .updatedAt(task.getUpdatedAt())

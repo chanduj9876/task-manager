@@ -64,6 +64,7 @@ public class NotificationService implements INotificationService {
                 .message(n.getMessage())
                 .eventType(n.getEventType())
                 .relatedTaskId(n.getRelatedTaskId())
+                .relatedOrgId(n.getRelatedOrgId())
                 .read(n.isRead())
                 .createdAt(n.getCreatedAt())
                 .build();

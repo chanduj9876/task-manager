@@ -23,7 +23,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -146,7 +149,11 @@ public class OrganizationService implements IOrganizationService {
             @CacheEvict(value = "userOrgs", key = "#memberId")
     })
     public OrgMemberResponse removeMember(UUID orgId, UUID memberId, UserDetailsImpl currentUser) {
-        assertMembership(currentUser.getId(), orgId, Role.ADMIN);
+        // Both ADMIN and MANAGER can remove members
+        assertMembership(currentUser.getId(), orgId, null);
+        if (!isManagerOrAdminInOrg(currentUser.getId(), orgId)) {
+            throw new AppException("Only ADMIN or MANAGER can remove members", HttpStatus.FORBIDDEN);
+        }
 
         if (currentUser.getId().equals(memberId)) {
             throw new AppException("You cannot remove yourself from the organization",
@@ -247,11 +254,20 @@ public class OrganizationService implements IOrganizationService {
     public List<OrgMemberResponse> getMembers(UUID orgId, UserDetailsImpl currentUser) {
         assertMembership(currentUser.getId(), orgId, null);
 
-        return userOrganizationRepository.findByOrgId(orgId).stream()
+        // Only return ACTIVE members — exclude PENDING invitees
+        List<UserOrganization> memberships =
+                userOrganizationRepository.findByOrgIdAndStatus(orgId, InvitationStatus.ACTIVE);
+
+        // Batch fetch all users in one query to avoid N+1
+        Set<UUID> userIds = memberships.stream()
+                .map(UserOrganization::getUserId).collect(Collectors.toSet());
+        Map<UUID, User> userMap = userRepository.findAllById(userIds)
+                .stream().collect(Collectors.toMap(User::getId, u -> u));
+
+        return memberships.stream()
                 .map(uo -> {
-                    User member = userRepository.findById(uo.getUserId())
-                            .orElseThrow(() -> new AppException("User not found",
-                                    HttpStatus.INTERNAL_SERVER_ERROR));
+                    User member = userMap.get(uo.getUserId());
+                    if (member == null) return null;
                     return OrgMemberResponse.builder()
                             .userId(member.getId())
                             .name(member.getName())
@@ -260,7 +276,9 @@ public class OrganizationService implements IOrganizationService {
                             .status(uo.getStatus())
                             .joinedAt(uo.getJoinedAt())
                             .build();
-                }).toList();
+                })
+                .filter(r -> r != null)
+                .toList();
     }
 
     @Cacheable(value = "userOrgs", key = "#currentUser.id")

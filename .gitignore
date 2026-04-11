@@ -1,0 +1,5 @@
+task-manager-frontend/node_modules
+task-manager-backend/target/
+
+# Environment secrets — never commit the real .env
+.env
