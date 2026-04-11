@@ -10,6 +10,8 @@ A full-stack, multi-organization task management platform. Teams can create orga
 - [Architecture](#architecture)
 - [Tech Stack](#tech-stack)
 - [Quick Start (Docker)](#quick-start-docker)
+  - [Access Points](#access-points)
+  - [Logs & Debugging](#logs--debugging)
 - [Local Development](#local-development)
 - [Environment Variables](#environment-variables)
 - [API Documentation](#api-documentation)
@@ -153,6 +155,51 @@ start http://localhost       # Windows
 | `tm-redis` | 6379 | Redis cache + token store |
 | `tm-kafka` | 9092 | Kafka broker |
 | `tm-zookeeper` | — | Kafka coordination (internal) |
+
+### Access Points
+
+Once all containers are healthy (`docker compose ps` shows all green), open:
+
+| URL | What you get |
+|---|---|
+| **http://localhost** | React UI (login / signup / dashboard) |
+| http://localhost/api/actuator/health | Backend health check — should return `{"status":"UP"}` |
+| http://localhost:8080/swagger-ui/index.html | Interactive API docs (Swagger UI) |
+
+> Nginx on port 80 proxies `/api` → `tm-backend:8080` and `/ws` → `tm-backend:8080`. You never need to open port 8080 directly in normal use.
+
+### Logs & Debugging
+
+```bash
+# View live logs for any container
+docker compose logs -f frontend     # Nginx access + error logs
+docker compose logs -f backend      # Spring Boot application logs
+docker compose logs -f postgres     # PostgreSQL logs
+docker compose logs -f kafka        # Kafka broker logs
+docker compose logs -f zookeeper    # Zookeeper logs
+
+# Check container health status
+docker compose ps
+
+# Tail last 100 lines of the backend
+docker compose logs --tail=100 backend
+
+# Shell into a running container for investigation
+docker exec -it tm-backend sh
+docker exec -it tm-postgres psql -U taskuser -d taskmanager
+docker exec -it tm-redis redis-cli
+```
+
+**Container name quick reference:**
+
+| Container | Name | Common use |
+|---|---|---|
+| Frontend (Nginx) | `tm-frontend` | Check if SPA built correctly; Nginx proxy errors |
+| Backend (Spring Boot) | `tm-backend` | Application errors, slow queries, Kafka timeouts |
+| PostgreSQL | `tm-postgres` | DB connection issues, schema problems |
+| Redis | `tm-redis` | Cache / token blacklist issues |
+| Kafka | `tm-kafka` | Event publishing/consuming failures |
+| Zookeeper | `tm-zookeeper` | Kafka coordination failures (rarely needed) |
 
 ### Stopping
 
